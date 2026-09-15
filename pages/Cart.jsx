@@ -1,14 +1,81 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
-import { remove } from '../redux/slices/Slice'
+import { decrement, remove } from '../redux/slices/Slice'
 
 const Cart = () => {
   const cart = useSelector(state => state.cart)
   const dispatch = useDispatch()
+  const [isPaying, setIsPaying] = React.useState(false)
+  const [paymentMessage, setPaymentMessage] = React.useState('')
 
   // total amount
   const totalAmount = cart.reduce((acc, item) => acc + item.price * item.qty, 0)
+
+  const handleCheckout = async () => {
+    setIsPaying(true)
+    setPaymentMessage('')
+
+    try {
+      const response = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map(item => ({ id: item.id, quantity: item.qty })),
+        }),
+      })
+      const order = await response.json()
+
+      if (!response.ok) {
+        throw new Error(order.message || 'Unable to start checkout.')
+      }
+
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+        script.onload = resolve
+        script.onerror = () => reject(new Error('Unable to load Razorpay Checkout.'))
+        document.body.appendChild(script)
+      })
+
+      const razorpay = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Ecomzy',
+        description: 'Shopping cart checkout',
+        order_id: order.orderId,
+        handler: async payment => {
+          try {
+            const verification = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payment),
+            })
+            const result = await verification.json()
+
+            if (!verification.ok || !result.verified) {
+              throw new Error(result.message || 'Payment verification failed.')
+            }
+
+            setPaymentMessage('Payment successful. Your order has been verified.')
+          } catch (error) {
+            setPaymentMessage(error.message)
+          }
+        },
+        modal: {
+          ondismiss: () => setPaymentMessage('Payment cancelled.'),
+        },
+        theme: { color: '#374151' },
+      })
+
+      razorpay.open()
+    } catch (error) {
+      setPaymentMessage(error.message)
+    } finally {
+      setIsPaying(false)
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -32,7 +99,7 @@ const Cart = () => {
                 className="flex items-center justify-between border-b border-gray-300 pb-4"
               >
                 <div className="flex items-center gap-4">
-                  <img src={item.image} alt="" className="h-20 object-contain" />
+                  <img src={item.image} alt={item.title} className="h-20 object-contain" />
                   <div>
                     <p className="font-semibold text-gray-800">
                       {item.title.substring(0, 30)}...
@@ -40,9 +107,23 @@ const Cart = () => {
                     <p className="text-green-600 font-bold">${item.price}</p>
                     <div className="flex items-center gap-3 mt-2">
                       <p className="text-gray-600 text-sm">Qty:</p>
-                      <button onClick={() => dispatch(remove(item.id))} className="w-6 h-6 border border-gray-400 rounded-full flex justify-center items-center hover:bg-gray-200 text-gray-800">-</button>
+                      <button
+                        type="button"
+                        aria-label={`Decrease quantity of ${item.title}`}
+                        onClick={() => dispatch(decrement(item.id))}
+                        className="w-6 h-6 border border-gray-400 rounded-full flex justify-center items-center hover:bg-gray-200 text-gray-800"
+                      >
+                        -
+                      </button>
                       <span className="font-semibold text-gray-800">{item.qty}</span>
-                      <button onClick={() => dispatch({ type: 'cart/add', payload: item })} className="w-6 h-6 border border-gray-400 rounded-full flex justify-center items-center hover:bg-gray-200 text-gray-800">+</button>
+                      <button
+                        type="button"
+                        aria-label={`Increase quantity of ${item.title}`}
+                        onClick={() => dispatch({ type: 'cart/add', payload: item })}
+                        className="w-6 h-6 border border-gray-400 rounded-full flex justify-center items-center hover:bg-gray-200 text-gray-800"
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -74,9 +155,17 @@ const Cart = () => {
               </span>
             </p>
 
-            <button className="w-full bg-gray-700 text-white py-2 rounded-full uppercase font-semibold hover:bg-gray-800 transition">
-              Checkout
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={isPaying}
+              className="w-full bg-gray-700 text-white py-2 rounded-full uppercase font-semibold hover:bg-gray-800 transition disabled:opacity-60"
+            >
+              {isPaying ? 'Starting checkout...' : 'Pay with Razorpay'}
             </button>
+            {paymentMessage && (
+              <p role="status" className="mt-3 text-sm text-gray-700">{paymentMessage}</p>
+            )}
           </div>
 
         </div>

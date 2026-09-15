@@ -42,6 +42,22 @@ A modern, responsive e-commerce shopping cart application built with React, Redu
 4. **Open your browser**
    Navigate to `http://localhost:5173`
 
+### Razorpay test payments
+
+The checkout flow uses a Node/Express server so the Razorpay secret never reaches
+the browser. Copy `.env.example` to `.env`, add Razorpay Test Mode credentials
+from the Razorpay dashboard, then run both processes:
+
+```bash
+npm run server
+npm run dev
+```
+
+The Vite development server proxies `/api` requests to the payment server.
+`POST /api/create-order` recalculates the amount from product IDs and quantities,
+and `POST /api/verify-payment` verifies Razorpay's HMAC signature. Never commit
+`.env` or use test credentials in production.
+
 ## 🏗️ Project Structure
 
 ```
