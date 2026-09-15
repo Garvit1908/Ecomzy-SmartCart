@@ -1,6 +1,6 @@
 import React from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { add, remove, decrement } from '../redux/slices/Slice'
+import { add, decrement } from '../redux/slices/Slice'
 
 const Productitem = (props) => {
   const product = props.product
@@ -27,7 +27,7 @@ const Productitem = (props) => {
       <div className="h-[160px] flex items-center justify-center">
         <img
           src={product.image}
-          alt="product"
+          alt={product.title}
           className="h-full object-contain"
         />
       </div>
